@@ -1,0 +1,15 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+.astro/
+
+# PRIVATE PLANNING — never commit. Strategy, chapter briefs, drafts-in-flight.
+# This is the load-bearing line: the repo is public; tmp/ is the private workspace.
+tmp/
+
+# env / editor / os
+.env
+.env.*
+.DS_Store

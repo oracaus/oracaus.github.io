@@ -1,0 +1,59 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { LINKS } from "../consts";
+
+const projects = [
+  {
+    name: "Oracaus · SVI vol-surface render alignment in React",
+    blurb:
+      "A React substrate that commits (input, output) frames from one snapshot, so heavy client-side compute against streaming inputs never paints a surface the market never held.",
+    links: [
+      {
+        href: LINKS.demo,
+        label: "Live demo",
+        note: "Two panels fit a vol surface against a ticking option chain. Trigger the vol shock and watch the naive panel tear while the substrate holds.",
+      },
+      {
+        href: LINKS.npm,
+        label: "npm · @oracaus/coherent-derivation",
+        note: "The hook useCoherentDerivation: commits each (input, output) pair atomically from one snapshot. About 3 KB gzipped, property-tested against thousands of random op-sequences.",
+      },
+      {
+        href: LINKS.repo,
+        label: "Source",
+        note: "The monorepo: the library, the demo, and the SVI fitting pipeline.",
+      },
+    ],
+  },
+];
+---
+
+<BaseLayout
+  title="Work · Oracaus"
+  description="Projects in real-time UI architecture and performance."
+>
+  <h1 class="text-2xl font-semibold tracking-tight">Work</h1>
+  <ul class="mt-8 space-y-10">
+    {
+      projects.map((p) => (
+        <li>
+          <h2 class="text-lg font-semibold">{p.name}</h2>
+          <p class="mt-1 leading-relaxed text-fg-muted">{p.blurb}</p>
+          <ul class="mt-3 space-y-3">
+            {p.links.map((l) => (
+              <li>
+                <a
+                  href={l.href}
+                  class="transition-colors font-mono text-sm text-accent-info hover:underline"
+                >
+                  {l.label}
+                </a>
+                <p class="mt-0.5 text-sm text-fg-muted">{l.note}</p>
+              </li>
+            ))}
+          </ul>
+        </li>
+      ))
+    }
+  </ul>
+</BaseLayout>

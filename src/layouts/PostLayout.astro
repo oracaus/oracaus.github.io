@@ -1,0 +1,53 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+import TagList from "../components/TagList.astro";
+
+interface Props {
+  title: string;
+  description?: string;
+  pubDate: Date;
+  updatedDate?: Date;
+  canonicalUrl?: string;
+  tags?: string[];
+}
+
+const { title, description, pubDate, updatedDate, canonicalUrl, tags } =
+  Astro.props;
+const fmt = (d: Date) => d.toISOString().slice(0, 10);
+---
+
+<BaseLayout title={title} description={description} canonical={canonicalUrl}>
+  <article>
+    <header class="mb-10 border-b border-border pb-8">
+      <p class="font-mono text-xs text-fg-muted">
+        <time datetime={fmt(pubDate)}>{fmt(pubDate)}</time>
+        {
+          updatedDate && (
+            <>
+              {" · updated "}
+              <time datetime={fmt(updatedDate)}>{fmt(updatedDate)}</time>
+            </>
+          )
+        }
+      </p>
+      <h1
+        class="mt-3 text-balance text-3xl font-semibold leading-tight tracking-tight sm:text-4xl"
+      >
+        {title}
+      </h1>
+      {
+        description && (
+          <p class="mt-4 max-w-prose text-pretty text-lg leading-relaxed text-fg-muted">
+            {description}
+          </p>
+        )
+      }
+      {tags && <TagList tags={tags} class="mt-5" />}
+    </header>
+    <div
+      class="space-y-4 leading-relaxed [&_a]:text-accent-info [&_a:hover]:underline [&_h2]:mt-10 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:mt-8 [&_h3]:text-lg [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:space-y-2 [&_pre]:rounded-lg [&_.fig_img]:w-full [&_.fig_figcaption]:mt-2 [&_.fig_figcaption]:text-sm [&_.fig_figcaption]:text-fg-muted"
+    >
+      <slot />
+    </div>
+  </article>
+</BaseLayout>

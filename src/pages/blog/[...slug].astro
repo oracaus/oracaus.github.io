@@ -1,0 +1,28 @@
+---
+import { getCollection, render } from "astro:content";
+import PostLayout from "../../layouts/PostLayout.astro";
+
+export async function getStaticPaths() {
+  // Drafts render in dev (preview a post in flight) but are excluded from
+  // production builds, so a draft route is never deployed.
+  const posts = await getCollection(
+    "blog",
+    ({ data }) => import.meta.env.DEV || !data.draft,
+  );
+  return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+---
+
+<PostLayout
+  title={post.data.title}
+  description={post.data.description}
+  pubDate={post.data.pubDate}
+  updatedDate={post.data.updatedDate}
+  canonicalUrl={post.data.canonicalUrl}
+  tags={post.data.tags}
+>
+  <Content />
+</PostLayout>

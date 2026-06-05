@@ -1,0 +1,33 @@
+---
+// Shared tag strip — identical rendering in the post header and the blog index
+// so tags read the same everywhere. Single line; when the tags exceed the
+// container width they truncate with a right-edge fade (CSS mask, no JS). The
+// strip is full-width, so the fade only bites when content actually reaches the
+// edge (it sits over empty space otherwise). All tags stay in the DOM, so
+// assistive tech reads the full set even when the strip is visually clipped.
+interface Props {
+  tags: string[];
+  class?: string;
+}
+const { tags, class: className } = Astro.props;
+const fade = "linear-gradient(to right, #000 calc(100% - 1.5rem), transparent)";
+---
+
+{
+  tags.length > 0 && (
+    <ul
+      aria-label="Tags"
+      class:list={[
+        "flex w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden",
+        className,
+      ]}
+      style={`mask-image:${fade};-webkit-mask-image:${fade}`}
+    >
+      {tags.map((t) => (
+        <li class="shrink-0 rounded-sm border border-border/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-fg-muted">
+          {t}
+        </li>
+      ))}
+    </ul>
+  )
+}

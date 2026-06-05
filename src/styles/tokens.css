@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/*
+ * Shared design tokens — lifted from the demo (oracaus/demo/src/styles.css)
+ * so oracaus.dev and demo.oracaus.dev read as one brand.
+ *
+ * Register: desk-operator, not designer-portfolio. Inter for prose and
+ * headings; JetBrains Mono for every number, date, and code span, with
+ * tabular-nums so digits align by column. OKLCH palette anchored on slate.
+ */
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  /* Palette — slate base, OKLCH for perceptually-uniform lightness steps. */
+  --color-bg: oklch(0.18 0.012 240);
+  --color-bg-elev: oklch(0.22 0.012 240);
+  --color-fg: oklch(0.94 0.008 240);
+  --color-fg-muted: oklch(0.68 0.012 240);
+  --color-border: oklch(0.3 0.014 240);
+
+  /* Accents — restrained, two-state semantic (pass / fail) + info + warn. */
+  --color-accent-ok: oklch(0.72 0.16 145);
+  --color-accent-stale: oklch(0.66 0.2 28);
+  --color-accent-info: oklch(0.7 0.13 230);
+  --color-accent-warn: oklch(0.82 0.17 85);
+}
+
+/*
+ * Focus indicator — shared with the demo so keyboard focus reads identically
+ * across oracaus.dev and demo.oracaus.dev. `.focus-ring` is the opt-in utility
+ * for islands / custom focus targets; the base rule below blankets every native
+ * interactive element (including MDX prose links, which take no class) so a
+ * visible ring is the default, not something each link has to remember.
+ */
+@layer components {
+  .focus-ring {
+    @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-info;
+  }
+}
+
+@layer base {
+
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible,
+  [tabindex]:not([tabindex="-1"]):focus-visible {
+    outline: 2px solid var(--color-accent-info);
+    outline-offset: 2px;
+  }
+}
+
+/* Tabular numerics for everything monospace. */
+.font-mono,
+code,
+kbd,
+pre,
+samp {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings:
+    "tnum" 1,
+    "ss01" 1;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+}
+
+/* Reduce-motion adopters get instant transitions. */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Slate-palette scrollbar to match the dark register. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}

@@ -1,0 +1,29 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { SITE, SOCIAL, LINKS } from "../consts";
+---
+
+<BaseLayout
+  title="About · Oracaus"
+  description="Przemyslaw Kalka, front-end systems engineer working on real-time risk and trading interfaces."
+>
+  <h1 class="text-2xl font-semibold tracking-tight">About</h1>
+  <div class="mt-6 space-y-4 leading-relaxed text-fg-muted">
+    <p>
+      I'm {SITE.author}, a front-end systems engineer based in London
+      specialising in real-time risk and trading interfaces across FX, fixed
+      income, derivatives, and commodities, where heavy compute meets
+      fast-moving data and a frame on screen has to correspond to a market that
+      existed.
+    </p>
+    <p>
+      I write here about profiling and fixing interfaces that never stop
+      updating. Open to consulting on real-time UI architecture and performance.
+    </p>
+    <p class="font-mono text-sm">
+      <a href={SOCIAL.linkedin} class="text-accent-info hover:underline">
+        LinkedIn
+      </a>
+    </p>
+  </div>
+</BaseLayout>

@@ -1,0 +1,49 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+import TagList from "../../components/TagList.astro";
+
+// Drafts show in dev for preview; production builds exclude them.
+const posts = (
+  await getCollection("blog", ({ data }) => import.meta.env.DEV || !data.draft)
+).sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+const fmt = (d: Date) => d.toISOString().slice(0, 10);
+---
+
+<BaseLayout
+  title="Writing · Oracaus"
+  description="Notes and essays on profiling and optimising real-time interfaces."
+>
+  <h1 class="text-3xl font-semibold tracking-tight">Writing</h1>
+  <p class="mt-3 max-w-prose text-pretty leading-relaxed text-fg-muted">
+    Notes and essays on profiling and optimising interfaces that never stop
+    updating. Steady-state performance, the part the load-time tools miss.
+  </p>
+  {
+    posts.length === 0 ? (
+      <p class="mt-10 text-fg-muted">First post landing soon.</p>
+    ) : (
+      <ul class="mt-10 border-t border-border">
+        {posts.map((p) => (
+          <li class="border-b border-border py-8">
+            <p class="font-mono text-xs text-fg-muted">
+              <time datetime={fmt(p.data.pubDate)}>{fmt(p.data.pubDate)}</time>
+            </p>
+            <h2 class="mt-2 text-balance text-xl font-semibold tracking-tight">
+              <a
+                href={`/blog/${p.id}/`}
+                class="transition-colors hover:text-accent-info"
+              >
+                {p.data.title}
+              </a>
+            </h2>
+            <p class="mt-2 max-w-prose text-pretty leading-relaxed text-fg-muted">
+              {p.data.description}
+            </p>
+            <TagList tags={p.data.tags} class="mt-3" />
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</BaseLayout>

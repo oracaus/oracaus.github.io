@@ -1,0 +1,52 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+import { LINKS } from "../consts";
+
+// Drafts show in dev for preview; production builds exclude them.
+const posts = (
+  await getCollection("blog", ({ data }) => import.meta.env.DEV || !data.draft)
+)
+  .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
+  .slice(0, 5);
+---
+
+<BaseLayout title="Oracaus · Real-Time UI Performance">
+  <section class="space-y-4">
+    <h1 class="text-3xl font-semibold tracking-tight">
+      Interfaces that never stop updating.
+    </h1>
+    <p class="leading-relaxed text-fg-muted">
+      I build real-time risk and trading interfaces across FX, fixed income,
+      derivatives, and commodities, where heavy compute meets fast-moving data.
+      This is where I write down how to profile and fix them.
+    </p>
+    <p class="font-mono text-sm">
+      <a href={LINKS.demo} class="text-accent-info hover:underline">
+        See it tear: the live demo →
+      </a>
+    </p>
+  </section>
+
+  {
+    posts.length > 0 && (
+      <section class="mt-12">
+        <h2 class="font-mono text-sm uppercase tracking-wide text-fg-muted">
+          Latest
+        </h2>
+        <ul class="mt-4 space-y-3">
+          {posts.map((p) => (
+            <li>
+              <a
+                href={`/blog/${p.id}/`}
+                class="transition-colors hover:text-accent-info"
+              >
+                {p.data.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+</BaseLayout>

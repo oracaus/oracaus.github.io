@@ -1,0 +1,20 @@
+---
+import { SITE, SOCIAL, LINKS } from "../consts";
+const year = new Date().getFullYear();
+---
+
+<footer class="border-t border-border">
+  <div
+    class="mx-auto flex max-w-3xl flex-col gap-1 px-6 py-8 text-sm text-fg-muted"
+  >
+    <p>{SITE.author} · {SITE.role}</p>
+    <p class="font-mono text-xs">
+      © {year} ·
+      <a href={SOCIAL.linkedin} class="transition-colors hover:text-fg"
+        >LinkedIn</a
+      > ·
+      <a href={LINKS.demo} class="transition-colors hover:text-fg">Demo</a> ·
+      <a href="/rss.xml" class="transition-colors hover:text-fg">RSS</a>
+    </p>
+  </div>
+</footer>
