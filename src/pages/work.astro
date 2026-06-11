@@ -4,9 +4,9 @@ import { LINKS } from "../consts";
 
 const projects = [
   {
-    name: "Oracaus · SVI vol-surface render alignment in React",
+    name: "Oracaus · Render alignment for heavy client-side compute in React",
     blurb:
-      "A React substrate that commits (input, output) frames from one snapshot, so heavy client-side compute against streaming inputs never paints a surface the market never held.",
+      "A React primitive that commits each (input, output) pair from a single snapshot, so heavy async compute against a streaming feed never paints a frame the inputs never produced. The live demo applies it to a streaming options vol-surface (SVI) fit.",
     links: [
       {
         href: LINKS.demo,
@@ -33,6 +33,11 @@ const projects = [
   description="Projects in real-time UI architecture and performance."
 >
   <h1 class="text-2xl font-semibold tracking-tight">Work</h1>
+  <p class="mt-4 leading-relaxed text-fg-muted">
+    I write a <a href="/blog" class="text-accent-info hover:underline">series on
+    real-time UI performance</a> and ship the methods as the open-source projects
+    below.
+  </p>
   <ul class="mt-8 space-y-10">
     {
       projects.map((p) => (

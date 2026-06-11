@@ -40,6 +40,113 @@
   .focus-ring {
     @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-info;
   }
+
+  /*
+   * Callouts — boxed asides for prose. `.callout` is the base panel; a variant
+   * sets the accent rule (and, for the invariant, the formal mono treatment).
+   * Authored in MDX, e.g. `<aside class="callout callout-info">`. An optional
+   * `.callout-title` gives a labelled admonition; the invariant takes no label.
+   */
+  .callout {
+    margin-block: 2rem;
+    padding: 1rem 1.25rem;
+    border-left: 3px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-bg-elev);
+  }
+
+  .callout-title {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-fg-muted);
+  }
+
+  .callout-info {
+    border-left-color: var(--color-accent-info);
+  }
+
+  .callout-warn {
+    border-left-color: var(--color-accent-warn);
+  }
+
+  .callout-error {
+    border-left-color: var(--color-accent-stale);
+  }
+
+  /*
+   * Invariant — a callout carrying a post's load-bearing statement, set as the
+   * formal law it is (mono, accent rule). No label: the surrounding heading and
+   * the treatment already mark it.
+   */
+  .callout-invariant {
+    border-left-color: var(--color-accent-info);
+    font-family: var(--font-mono);
+    font-size: 1.125rem;
+    line-height: 1.5;
+    color: var(--color-fg);
+  }
+
+  /*
+   * Prose tables — comparison grids in posts. The `rehypeTableWrap` plugin boxes
+   * every markdown table in `.table-scroll`, so these styles reach any future
+   * table and a wide one scrolls rather than overflowing. Register matches the
+   * callouts: rounded slate frame, mono uppercase column labels, a quiet
+   * `bg-elev` zebra, and hairline row rules.
+   */
+  .table-scroll {
+    margin-block: 2rem;
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+  }
+
+  .table-scroll table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .table-scroll th,
+  .table-scroll td {
+    padding: 0.7rem 0.95rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .table-scroll thead th {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--color-fg-muted);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .table-scroll tbody td {
+    color: var(--color-fg-muted);
+    border-bottom: 1px solid
+      color-mix(in oklab, var(--color-border) 45%, transparent);
+  }
+
+  .table-scroll tbody tr:nth-child(odd) {
+    background: var(--color-bg-elev);
+  }
+
+  .table-scroll tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .table-scroll tbody td:first-child {
+    color: var(--color-fg);
+    font-weight: 500;
+  }
 }
 
 @layer base {

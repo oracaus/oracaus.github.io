@@ -11,9 +11,9 @@ export const SITE = {
 };
 
 export const SOCIAL = {
-  // TODO: replace with the real LinkedIn profile URL.
-  linkedin: "https://www.linkedin.com/in/REPLACE-ME",
-  github: "https://github.com/oracaus",
+  linkedin: "https://www.linkedin.com/in/przemyslawkalka/?locale=en",
+  github: "https://github.com/przemek-k",
+  devto: "https://dev.to/przemek-k",
 };
 
 export const LINKS = {

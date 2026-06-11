@@ -14,9 +14,30 @@ interface Props {
 const { title, description, pubDate, updatedDate, canonicalUrl, tags } =
   Astro.props;
 const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+// BlogPosting structured data. author/publisher reference the sitewide #person
+// node (BaseLayout), so every post reinforces one author entity.
+const personId = new URL("/#person", Astro.site).href;
+const postURL = canonicalUrl ?? new URL(Astro.url.pathname, Astro.site).href;
+const blogPosting = {
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  headline: title,
+  ...(description ? { description } : {}),
+  datePublished: pubDate.toISOString(),
+  dateModified: (updatedDate ?? pubDate).toISOString(),
+  author: { "@id": personId },
+  publisher: { "@id": personId },
+  image: new URL("/og-image.png", Astro.site).href,
+  url: postURL,
+  mainEntityOfPage: { "@type": "WebPage", "@id": postURL },
+  inLanguage: "en",
+  ...(tags && tags.length ? { keywords: tags } : {}),
+};
 ---
 
 <BaseLayout title={title} description={description} canonical={canonicalUrl}>
+  <script type="application/ld+json" set:html={JSON.stringify(blogPosting)} />
   <article>
     <header class="mb-10 border-b border-border pb-8">
       <p class="font-mono text-xs text-fg-muted">

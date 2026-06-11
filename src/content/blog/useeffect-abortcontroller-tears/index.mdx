@@ -1,0 +1,383 @@
+---
+title: "I Cancelled the Stale Request. The Render Still Lied."
+description: "useEffect plus AbortController is the correct async pattern, and under load it still renders a state the data never made. Why cancellation is not coherence, and the one invariant that fixes it."
+pubDate: 2026-06-12
+draft: false
+tags: ["react", "async", "concurrency", "state-management", "real-time"]
+---
+
+import VideoEmbed from "../../../components/VideoEmbed.astro";
+
+The pattern is the correct one. An input changes, a `useEffect` fires the async
+compute, an `AbortController` cancels the one still in flight, and `setState`
+commits the result. I had moved the heavy work off the render path, wired all of
+it, and cancelled cleanly. Under load the chart still drew a shape the data never
+made. Not stale, not a race I had forgotten to guard: one frame, stitched from two
+different moments.
+
+Cancellation had handled the old request. It had never promised that the result I
+committed was paired with the input I committed it against.
+
+Three properties get conflated into one.
+
+1. **Freshness**: how recent the output is.
+2. **Cancellation**: whether obsolete work was prevented from committing.
+3. **Coherence**: whether the frame was ever true as a whole.
+
+They are independent. You can cancel perfectly,
+render the freshest input, and still commit a frame that was never true.
+
+Once a derivation runs asynchronously, "showing the right thing" stops meaning the
+latest result and starts meaning a result paired with the input it was computed
+from. React's default, where each piece of state updates on its own, quietly
+breaks that pairing the moment the compute outlasts the gap between inputs. And
+the rule for what to do when a fresh input lands mid-compute inverts depending on
+the kind of input: a slider and a market tick want opposite handling. That
+asymmetry is the part I had not seen written down, and it is the second half of
+this post.
+
+## The pattern you trust
+
+You have shipped this one, and it worked: a typeahead box. The user types, a
+`useEffect` fires a `fetch`, an `AbortController` cancels the request still in flight,
+a spinner holds the gap, and the matching results commit. It is correct, and it stays
+correct for two supports that are easy to stop noticing:
+
+1. **The browser enforces the cancel.** Abort a `fetch` and the response never reaches
+   your code, so a stale result cannot surface to be mispaired.
+2. **The input is an intent.** When the query moves you genuinely want the work in
+   flight gone, so cancel-and-restart is exactly the right policy.
+
+Heavy local compute removes the first support. A live feed removes the second. The
+rest of this post is those two changes, one at a time, and the one invariant that
+survives both.
+
+## The first change: heavy local compute
+
+The fix was correct. It also opened this hole, by taking the first of those two
+supports away.
+
+Last time, the question was where a re-drawing chart actually spends its time. This
+post starts one move earlier, at the decision that made the chart async in the first
+place. A fit, a revaluation, a Monte Carlo that takes longer than a frame cannot run
+in the render body without freezing the UI, so you move it off the main thread, into
+a worker, and the interface stays responsive. That is the right call, and the bug
+only exists because I made it: I had already solved the performance problem, and that
+is what created the correctness one.
+
+A `fetch` the browser would have cancelled for you; a worker will not, unless the
+compute polls the abort signal mid-flight, which the heavy synchronous work you moved
+there rarely does. Its result comes back later, and "later" is long enough for the
+input to have moved. The result lands tagged, in your head, to the input that started it, and gets
+committed next to whatever the input happens to be now. Nobody wrote a bug. The
+bug is structural: going async split one operation into "what I asked" and "what
+came back", and nothing in the default model keeps those two paired when they
+reach the screen.
+
+## Thirty lines that lie
+
+You do not need a vol surface to see it. Here is the whole phenomenon, and the
+output is an arithmetic lie you cannot argue with.
+
+```tsx title="The async compute (stands in for any heavy derivation)"
+function asyncSquare(n: number, signal: AbortSignal): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => resolve(n * n), 120); // one heavy compute
+    signal.addEventListener("abort", () => {
+      clearTimeout(t);
+      reject(new DOMException("aborted", "AbortError"));
+    });
+  });
+}
+```
+
+```tsx title="The textbook pattern, done correctly"
+function IncoherentSquare() {
+  const [n, setN] = useState(2);
+  const [sq, setSq] = useState(4);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    asyncSquare(n, ctrl.signal)
+      .then(setSq)
+      .catch(() => {});
+    return () => ctrl.abort(); // cancels the stale request, correctly
+  }, [n]);
+
+  return (
+    <>
+      <input type="number" value={n} onChange={(e) => setN(+e.target.value)} />
+      <p>
+        {n}² = {sq}
+      </p>
+    </>
+  );
+}
+```
+
+`n` updates synchronously, the instant you type. `sq` updates only when a compute
+finishes, 120 ms later. They are two independent pieces of state, and the last line
+composes them as if they moved together. Settle on `7` and it reads `7² = 49`,
+correct. Now change to `9`: for the next 120 ms the line reads `9² = 49`, the new
+input shown against the previous input's output. Keep the input moving faster than
+the compute and the gap never closes.
+
+The `AbortController` is correct, and it is beside the point. There is nothing here
+for better cancellation to fix: with `9` in the box only one compute is in flight,
+and the lie is on screen the entire time it runs. `n` updates now, `sq` updates
+later, and the two are no longer coupled. The bug is not a leftover request to clean
+up. It is two independent values composed as if they were one. Cancellation is not
+coherence.
+
+Call the complete input state observed when a derivation begins its **snapshot**.
+The bug then has a one-line name.
+
+<aside class="callout callout-warn">
+  <span class="callout-title">Composition incoherence</span>A frame that
+  combines inputs from one snapshot with a derived output computed from another.
+</aside>
+
+Coherence and freshness are independent properties. A coherent frame can be old. An
+incoherent frame can pair your newest input with an output left over from an earlier
+one. `9² = 49` shows the newest input, 9, against a stale answer: the defect is not
+age, it is the pairing. The rest of this post is a single rule, every emitted frame
+pairing its input and output from one snapshot, and the two guarantees that hold it
+up.
+
+<figure class="fig">
+
+![Two timelines. In both, the input is 7 then changes to 9 while square(7) is still computing and produces 49. The incoherent commit pairs the live 9 with 7's output and reads 9 squared equals 49. The coherent commit keeps the output paired with its snapshot, 7, and reads 7 squared equals 49.](./composition-incoherence.svg)
+
+<figcaption>
+  The compute starts against snapshot 7 and finishes after the input has moved
+  to 9. Pairing the output with the live input is the lie. Pairing it with the
+  snapshot it used is the fix.
+</figcaption>
+
+</figure>
+
+## The same bug, with money on it
+
+Squares are unarguable but cheap. Here is the same failure with a cost attached.
+
+The [live demo](https://demo.oracaus.dev) fits a volatility surface to a streaming
+option chain, the kind of heavy compute a trading desk runs on the client. Two
+panels run the identical fit against the identical feed. The top commits on every
+tick the textbook way. The bottom holds the pairing this post is about.
+
+Hit the vol shock. It is the square again, now a curve and a cloud of dots: the dots
+from the latest tick, the curve from a fit a few ticks back, painted as one picture.
+At the top the curve pulls away from the dots at the strikes that just moved; at the
+bottom it holds. Every point on the torn curve is real, and as a whole it matches no
+chain that existed at any single instant. The same failure as the square, now with a
+position behind it.
+
+<VideoEmbed
+  id="CH8vc6owIUI"
+  start={73}
+  title="Oracaus demo: the naive panel tears while the coherent panel holds, under the vol shock"
+  caption="Split-screen, mid vol-shock: the naive panel's curve pulls away from the dots at the strikes that just moved. The coherent panel's curve holds against its dots."
+/>
+
+It is tempting to read the bottom panel as "more up to date". The fit takes as long
+as it takes, and within itself the bottom panel is not ahead of anything: its curve
+and its dots come from the same tick. It does run fresher than the top panel here,
+because the naive panel additionally lets its fit queue back up and a saturated
+queue commits older work, but that queue is a separate failure from the tear. The
+demo shows two numbers per panel to keep the distinction honest:
+
+- **Coherence error**: how far the curve on screen sits from the quotes on screen,
+  in the same frame. This is what the pairing fixes. At the top it already runs
+  from tens to hundreds of per cent with the feed calm, and crosses 2000% under the
+  shock. At the bottom it holds around 15% in both regimes, the scale of the fit's
+  own residual against the deliberately noisy quotes.
+- **Ground-truth fit error**: how far each panel's fitted parameters sit from the
+  true surface they were fitting. This is the fitter's own error, the irreducible
+  cost of recovering parameters from noisy quotes, and the pairing neither improves
+  nor worsens it. It is the same on both panels, calm and under shock: when the
+  coherence error above explodes, this number does not move. The gulf above is the
+  tear, not a difference in fit quality.
+
+So the claim is narrow and it is measurable: coherence error diverges while
+ground-truth fit error stays equal. A coherent frame a few ticks behind is a
+real past state you can act on. An incoherent frame is a tuple that was never true
+at any instant. The fix buys you the first and cannot buy you the second.
+
+## The invariant
+
+State the goal as one sentence and the rest follows:
+
+<aside class="callout callout-invariant">
+  Every emitted frame composes (input, output) from the same snapshot.
+</aside>
+
+Two guarantees uphold it, and it is worth adding them one at a time, because they
+fix different failures.
+
+**Atomic commit** kills the false tuple. Keep the input and the output in one
+object and commit them together, pairing the output with the input it was actually
+computed from:
+
+```tsx title="Guarantee 1: commit the pair, not two slots"
+.then((out) => setPair({ in: n, out })); // n is the input this compute started on
+```
+
+Now no frame is internally false. You never see `9² = 49` again. A single store,
+whether `useState` with one object or a `useReducer`, gives you the atomic commit and
+no more false tuples. One object is only half the fix. In the timer above, the cleanup truly cancels: `clearTimeout` stops the superseded
+compute, so it never resolves and there is nothing stale to commit. That is why the
+timer alone never shows the next failure. A worker makes no such promise. Its `abort`
+is a message the worker cannot read until the compute in hand returns, so a
+synchronous fit you tried to cancel runs to completion and hands you its result
+anyway, still tagged in your head to an input you have already left:
+
+```text title="No id tag: the cancelled compute returns anyway"
+n → 7   start compute A             id 1
+n → 9   abort A, start compute B    id 2   (A is mid-compute; the abort waits)
+        A returns {in: 7, out: 49}         you are already on 9
+        B returns {in: 9, out: 81}
+```
+
+Both pairs are true. Commit them as they land and you paint `7² = 49` for an input
+you abandoned before `9² = 81` arrives; under a moving slider, a whole backlog of
+abandoned inputs paints ahead of the latest. The cancel did nothing the worker could
+honour.
+
+**Identity-based admission** keeps only the current one. Tag each input with a
+monotonic id and commit only a response whose id is still current:
+
+```tsx title="Guarantee 2: drop a response that is no longer current"
+const id = ++currentId.current;
+// later, when the response lands:
+.then((out) => { if (id === currentId.current) setPair({ in: n, out }); });
+```
+
+The first guarantee makes each frame true. The second keeps only the current input's
+frame. Put exactly that way, the two imply the invariant: every committed pair is
+internally consistent, and a superseded response is dropped rather than committed, so
+you never paint a result for an input you have moved past. Each emitted frame draws
+its input and output from one snapshot, and only the latest is painted.
+
+Split the work across a pool, or let the compute itself await, and responses can
+arrive out of order for real; the same id covers that case too. With one synchronous
+worker the order already holds, and the id still earns its place, because the cancel
+cannot stop the superseded compute from coming back.
+
+Here is the minimal correct core, the same repro with both changes in place:
+
+```tsx title="The minimal coherent core"
+function CoherentSquare() {
+  const [n, setN] = useState(2);
+  const [pair, setPair] = useState({ in: 2, out: 4 }); // 1: one store, one pair
+  const currentId = useRef(0);
+
+  useEffect(() => {
+    const id = ++currentId.current; // 2: identity tag for this input
+    const ctrl = new AbortController();
+    asyncSquare(n, ctrl.signal)
+      .then((out) => {
+        if (id === currentId.current) setPair({ in: n, out }); // drop stale
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [n]);
+
+  return (
+    <>
+      <input type="number" value={n} onChange={(e) => setN(+e.target.value)} />
+      <p>
+        {pair.in}² = {pair.out}
+      </p>
+    </>
+  );
+}
+```
+
+It reads `2² = 4`, then a beat later `7² = 49`, then `9² = 81`. Never `9² = 49`,
+and never a result for an input you have left. It lags, and it is always true:
+coherence, not recency, in two lines of difference.
+
+Why an identifier, and not the obvious alternatives. A timestamp ties correctness to
+input timing: it holds until two snapshots fall in the same millisecond, which a
+counter never has to rule out. Value equality collapses two distinct snapshots that
+happen to hold equal inputs. No tag at all, leaning on cancellation, cannot tell you
+whether a late response belongs to the input on screen. A monotonic identifier, unique
+by construction, survives all three, which is the only reason it is there.
+
+## The second change: a live feed
+
+The coherent square is correct, but it has only ever faced one kind of input.
+Cancelling on every change to `n` bakes in an assumption: that `n` is an intent, where
+the latest value is the only one you want, so the work for everything before it should
+be thrown away. For a slider or a typed field that is exactly right, and you have
+shipped it before: it is the typeahead reflex, cancel the request for the value the
+user moved past and wait for the one that matches.
+
+It is wrong for a market tick, which typeahead never has to face, because a search
+box only ever emits intents. Cancel and restart on every tick, with a feed faster
+than the fit, and nothing ever finishes:
+
+```text title="Cancel-and-restart on every tick, feed faster than the fit"
+fit needs 60 ms;   a tick lands every 20 ms
+t=0    tick1   start fit
+t=20   tick2   cancel, restart   (20 ms of work binned)
+t=40   tick3   cancel, restart   (binned again)
+t=60   tick4   cancel, restart   ...
+```
+
+The fit is always part-way into a compute it will never be allowed to complete, and
+nothing commits. The opposite policy absorbs the ticks: tick1's fit runs to
+completion, each later tick is noted as the single pending input, and when the fit
+lands it commits tick1's result and immediately starts the next fit against tick4,
+the latest input then waiting. You stay a fit behind, and you always finish.
+
+So inputs come in two kinds, and the policies are opposites:
+
+- **streaming absorbs**: a change mid-compute does not cancel; the in-flight
+  completes against its tagged snapshot.
+- **intent cancels-and-restarts**: a change mid-compute supersedes the in-flight.
+
+Mixed inputs are the common case, not the exception. The demo runs both at once: a
+streaming chain underneath and an intent control on top. There is deliberately no
+third "always use the latest" kind. If that is what you want, you do not need any
+of this.
+
+## Why the things you would reach for do not fix it
+
+This two-way asymmetry is also where the usual tools stop short. Cancellation is the
+typeahead reflex; like the others it guarantees something real, and none of it is the
+pairing:
+
+| Tool                                             | Guarantees             | Does not guarantee   |
+| ------------------------------------------------ | ---------------------- | -------------------- |
+| Cancellation (`AbortController`, `switchMap`)    | request cancellation   | the committed pair   |
+| Scheduling (`useDeferredValue`, `useTransition`) | render prioritisation  | input-output pairing |
+| Caching (react-query, SWR)                       | server-state freshness | snapshot coherence   |
+
+None of them sit at the commit boundary, where an input and an output become one
+frame. Debouncing an intent or throttling a feed only makes collisions rarer; and
+keeping the input and the output in separate `setState`s is the defect itself, not a
+fix, because the input commits the instant it changes and the output commits when the
+compute returns, two writes React has no reason to pair.
+
+## Where this leaves you, and where Oracaus fits
+
+The invariant and the two guarantees are the transferable part. You can hold them
+by hand for one derivation.
+[`@oracaus/coherent-derivation`](https://www.npmjs.com/package/@oracaus/coherent-derivation)
+packages those same two guarantees with the input-kind policies, the tear-free read,
+and worker and lifecycle handling. One hook, a synthetic-feed demo, no public
+adopters yet: take it as a worked reference as much as a dependency.
+
+## Check it yourself
+
+Open the [demo](https://demo.oracaus.dev), trigger the vol shock, and watch the two
+panels. Then watch the two numbers: coherence error diverges on the naive panel
+while ground-truth fit error stays level across both. The picture is the hook,
+the number is the claim, reproduce the number.
+
+A perf fix that keeps the interface responsive can still hand the user a frame that
+was never true. That is composition incoherence: cancellation does not prevent it,
+recency does not describe it. The moment a derivation runs asynchronously, coherence 
+stops being something the framework hands you and becomes something your architecture 
+has to keep.

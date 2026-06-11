@@ -1,9 +1,10 @@
 ---
 import "../styles/tokens.css";
 import { Font } from "astro:assets";
+import { ClientRouter } from "astro:transitions";
 import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
-import { SITE } from "../consts";
+import { SITE, SOCIAL } from "../consts";
 
 interface Props {
   title: string;
@@ -26,6 +27,43 @@ const ogImageURL = new URL(image ?? "/og-image.png", Astro.site).href;
 // the live domain, so even a local preview of the production build is ignored.
 // Cookieless and GDPR-friendly, so no consent banner is required.
 const isProd = import.meta.env.PROD;
+
+// Structured data (schema.org). A sitewide Person + WebSite graph, cross-linked
+// by @id, so search engines resolve oracaus.dev to a single author entity and
+// follow sameAs to the off-site profiles. Machine-only; no user-facing surface.
+// Post pages add a BlogPosting (PostLayout) whose author references #person.
+const personId = new URL("/#person", Astro.site).href;
+const websiteId = new URL("/#website", Astro.site).href;
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Person",
+      "@id": personId,
+      name: SITE.author,
+      url: new URL("/about", Astro.site).href,
+      jobTitle: SITE.role,
+      knowsAbout: [
+        "Real-time UI performance",
+        "Front-end systems engineering",
+        "React",
+        "Web performance",
+        "Trading and risk interfaces",
+      ],
+      sameAs: [SOCIAL.linkedin, SOCIAL.github, SOCIAL.devto],
+    },
+    {
+      "@type": "WebSite",
+      "@id": websiteId,
+      url: SITE.url,
+      name: SITE.name,
+      description: SITE.description,
+      inLanguage: "en",
+      publisher: { "@id": personId },
+      author: { "@id": personId },
+    },
+  ],
+};
 ---
 
 <!doctype html>
@@ -60,6 +98,10 @@ const isProd = import.meta.env.PROD;
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImageURL} />
     <meta name="generator" content={Astro.generator} />
+    {/* Soft-navigate between routes so persisted chrome (the logo) doesn't
+       repaint. MPA stays the fallback if the runtime can't load. */}
+    <ClientRouter />
+    <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
     <link
       rel="alternate"
       type="application/rss+xml"

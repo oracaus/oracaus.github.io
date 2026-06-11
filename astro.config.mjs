@@ -5,6 +5,41 @@ import mdx from "@astrojs/mdx";
 import sitemap from "@astrojs/sitemap";
 import expressiveCode from "astro-expressive-code";
 import tailwindcss from "@tailwindcss/vite";
+import rehypeExternalLinks from "rehype-external-links";
+
+// Wrap every markdown table in a horizontally scrollable container, so a wide
+// table scrolls instead of breaking the layout on a narrow viewport. Reaches
+// every post automatically; `.table-scroll` is styled in tokens.css.
+//
+// `// @ts-check` + `astro/tsconfigs/strict` turns on `noImplicitAny`, so the
+// hast tree/node params need a type. A minimal local shape (just the fields
+// this walker touches) keeps it self-contained, rather than pulling in the
+// full `hast` union — whose `children`-bearing members would force narrowing.
+/** @typedef {{ type: string; tagName?: string; properties?: unknown; children?: HastNode[] }} HastNode */
+/** @returns {(tree: HastNode) => void} */
+function rehypeTableWrap() {
+  return (tree) => {
+    /** @param {HastNode} node */
+    const walk = (node) => {
+      const kids = node.children;
+      if (!kids) return;
+      for (let i = 0; i < kids.length; i++) {
+        const child = kids[i];
+        if (child.type === "element" && child.tagName === "table") {
+          kids[i] = {
+            type: "element",
+            tagName: "div",
+            properties: { className: ["table-scroll"] },
+            children: [child],
+          };
+        } else {
+          walk(child);
+        }
+      }
+    };
+    walk(tree);
+  };
+}
 
 // Apex site for the Oracaus house brand. Static output → GitHub Pages.
 // expressiveCode() must precede mdx() so MDX code fences pick up the
@@ -53,6 +88,15 @@ export default defineConfig({
     sitemap(),
   ],
   vite: { plugins: [tailwindcss()] },
+  // External links open in a new tab with a secure rel (noopener blocks
+  // reverse-tabnabbing). Internal/relative links are left untouched. @astrojs/mdx
+  // inherits markdown.* config by default, so this covers both .md and .mdx.
+  markdown: {
+    rehypePlugins: [
+      [rehypeExternalLinks, { target: "_blank", rel: ["noopener", "noreferrer"] }],
+      rehypeTableWrap,
+    ],
+  },
   // Inline all CSS into <head> rather than linking it. The site + expressive-code
   // stylesheets are a few KB each and sit just above Astro's auto-inline threshold,
   // so by default they load as render-blocking requests. Total CSS is tiny, so the

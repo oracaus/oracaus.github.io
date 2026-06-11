@@ -1,0 +1,100 @@
+---
+// Locked-down YouTube embed: privacy-enhanced host, no related grid, no control
+// bar (so no CC button, gear, or in-player YouTube logo). controls=0 also strips
+// YouTube's own fullscreen button, so we add a custom one wired to the Fullscreen
+// API on the iframe element. The unavoidable YouTube title overlay on hover/pause
+// is a platform constraint; keep the video's own title minimal on YouTube's side.
+interface Props {
+  id: string;
+  /** seek-to-start in seconds */
+  start?: number;
+  /** iframe title / accessible name */
+  title: string;
+  /** figure caption (plain text) */
+  caption?: string;
+}
+
+const { id, start = 0, title, caption } = Astro.props;
+
+const params = [
+  start ? `start=${start}` : null,
+  "rel=0",
+  "controls=0",
+  "modestbranding=1",
+  "iv_load_policy=3",
+  "playsinline=1",
+  "disablekb=1",
+]
+  .filter(Boolean)
+  .join("&");
+
+const src = `https://www.youtube-nocookie.com/embed/${id}?${params}`;
+---
+
+<figure class="fig">
+  <div class="relative aspect-video" data-video-embed>
+    <iframe
+      class="h-full w-full rounded-lg border-0"
+      src={src}
+      title={title}
+      loading="lazy"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture; web-share"
+    ></iframe>
+    <button
+      type="button"
+      data-fullscreen
+      aria-label="View full screen"
+      class="absolute bottom-2 right-2 grid h-8 w-8 cursor-pointer place-items-center rounded-md bg-black/55 text-white backdrop-blur-sm transition hover:bg-black/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-info"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        class="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"></path>
+      </svg>
+    </button>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script>
+  type FsIframe = HTMLIFrameElement & { webkitRequestFullscreen?: () => void };
+  type FsDoc = Document & {
+    webkitFullscreenElement?: Element;
+    webkitExitFullscreen?: () => void;
+  };
+
+  const doc = document as FsDoc;
+
+  // Re-bind on every page load. The ClientRouter swaps post content without
+  // re-executing this module, so a one-shot bind at parse time would miss
+  // videos on soft-navigated pages. astro:page-load also fires on first load,
+  // and swapped-in buttons are fresh nodes, so there are no duplicate handlers.
+  function bindVideoEmbeds() {
+    for (const wrap of document.querySelectorAll<HTMLElement>(
+      "[data-video-embed]",
+    )) {
+      const iframe = wrap.querySelector<FsIframe>("iframe");
+      const btn = wrap.querySelector<HTMLButtonElement>("[data-fullscreen]");
+      if (!iframe || !btn) continue;
+
+      btn.addEventListener("click", () => {
+        if (doc.fullscreenElement ?? doc.webkitFullscreenElement) {
+          (doc.exitFullscreen ?? doc.webkitExitFullscreen)?.call(doc);
+        } else {
+          (iframe.requestFullscreen ?? iframe.webkitRequestFullscreen)?.call(
+            iframe,
+          );
+        }
+      });
+    }
+  }
+
+  document.addEventListener("astro:page-load", bindVideoEmbeds);
+</script>

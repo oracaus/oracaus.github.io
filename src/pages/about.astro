@@ -1,6 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { SITE, SOCIAL, LINKS } from "../consts";
+import { SITE, SOCIAL } from "../consts";
 ---
 
 <BaseLayout
@@ -10,20 +10,30 @@ import { SITE, SOCIAL, LINKS } from "../consts";
   <h1 class="text-2xl font-semibold tracking-tight">About</h1>
   <div class="mt-6 space-y-4 leading-relaxed text-fg-muted">
     <p>
-      I'm {SITE.author}, a front-end systems engineer based in London
-      specialising in real-time risk and trading interfaces across FX, fixed
-      income, derivatives, and commodities, where heavy compute meets
-      fast-moving data and a frame on screen has to correspond to a market that
-      existed.
+      I'm <span class="font-bold">{SITE.author}</span>, a front-end systems
+      engineer based in London, building real-time risk and trading interfaces
+      across FX, fixed income, derivatives, and commodities.
+    </p>
+    <p>
+      That corner of front-end has its own physics. Input rate, render rate, and
+      compute rate are three separate clocks. p99 frame time matters more than
+      the mean. A worker round-trip, a GC pause, or a stale async result can
+      each put a number on screen the market never held. Most of it lives as
+      desk folklore rather than written method. I work at the seam of two things
+      that rarely sit together, trading-desk domain and front-end systems depth,
+      and that combination is what this site is about.
     </p>
     <p>
       I write here about profiling and fixing interfaces that never stop
-      updating. Open to consulting on real-time UI architecture and performance.
-    </p>
-    <p class="font-mono text-sm">
-      <a href={SOCIAL.linkedin} class="text-accent-info hover:underline">
-        LinkedIn
-      </a>
+      updating, and turn the methods into <a
+        href="/work"
+        class="text-accent-info hover:underline">open-source projects</a
+      > you can read and run. Open to senior front-end systems engineering roles,
+      and to consulting on real-time UI architecture and performance. The fastest
+      way to reach me is <a
+        href={SOCIAL.linkedin}
+        class="text-accent-info hover:underline">LinkedIn</a
+      >.
     </p>
   </div>
 </BaseLayout>
