@@ -1,6 +1,6 @@
 ---
 title: "The Animation Wasn't Where the Time Went"
-description: "A chart redraws at 5 Hz while its y-axis rescales. Moving the rescale onto the compositor cut main-thread work by roughly two-thirds. The costs I expected never appeared. The redraw itself dominated."
+description: "A chart redraws at 5 Hz while its y-axis rescales. Animating the rescale as a composited transform, instead of re-rendering every frame, cut main-thread work by roughly two-thirds. The costs I braced for never fired. The redraw itself dominated."
 pubDate: 2026-06-05
 draft: false
 tags: ["performance", "react", "web-animations-api", "svg", "rendering"]
@@ -21,14 +21,12 @@ jump.
 </figure>
 
 So two things happen on the same element at once: a transform animation (the
-rescale) and a high-frequency content update (the redraw). I spent a while
-convinced the hard part was keeping the animation cheap while the redraw kept
-firing. I built a rig to measure it. The cost was somewhere I had stopped
-looking.
-
-More precisely than the title lets on: in this workload, a compositor-driven
-transform stays cheap even while the chart redraws at 5 Hz, and the two layout
-costs I braced for measured as nothing. The bill was the redraw itself.
+rescale) and a high-frequency content update (the redraw). The instinct is that
+the hard part is keeping the animation cheap while the redraw keeps firing. I
+built a rig to measure it, and the instinct pointed at the wrong thing. A
+transform, handed to the compositor, stays cheap even while the chart redraws at
+5 Hz, and the two layout costs I braced for came to nothing. The bill was the
+redraw itself.
 
 ## The naive rescale: interpolate on the main thread
 
@@ -42,33 +40,48 @@ scales and rebuilds the plot, which is the same redraw cost you already pay at
 animation competes for the main thread with the very updates it is animating
 over.
 
-Measurements come from a production-built Chrome rig reproducing the workload of the [live demo](https://demo.oracaus.dev) (a
-single SVG group of moving nodes plus the transform animation, no CPU throttling).
+Measurements come from a production-built Chrome rig reproducing the workload of the [live demo](https://demo.oracaus.dev) (about
+200 moving nodes and a transform rescale, no CPU throttling).
 Each figure below is total main-thread time accumulated over a five second trace,
 not a per-frame or per-second number:
 
 ```text title="5 s window · ~200 nodes · production build · no throttle"
                       Scripting   Rendering   Painting   ~main thread
 rAF (per-frame)         43 ms       48 ms       16 ms       ~107 ms
-WAAPI (compositor)      17 ms       19 ms        4 ms        ~40 ms
+WAAPI transform         17 ms       19 ms        4 ms        ~40 ms
 ```
 
-## The fix: hand the transform to the compositor
+## The fix: a composited transform, on an element that can take it
 
 The rescale is, geometrically, a pure transform. Re-render the content at the
 *new* range immediately, then animate a `translateY` and `scaleY` from the value
-that makes the new layout *look like* the old range back to identity. Because
-that animation touches only `transform`, the browser can run the interpolation
-on the compositor:
+that makes the new layout *look like* the old range back to identity. Two things
+have to hold for that to stay off the main thread, and the second is easy to miss.
+
+First, animate `transform` only, and let React commit once. The keyframes touch
+nothing but `transform`; React renders the chart a single time, at the new range,
+then stays out of the transition. That alone is most of the drop from 107 ms to
+40 ms: the main thread stops rebuilding the chart sixty times a second.
+
+Second, animate an element the compositor will actually promote. Chrome runs
+transform animations on the compositor for HTML and replaced elements, but not for
+SVG child elements. Put the animation on an inner `<g>` and it falls back to
+per-frame main-thread layout, silently, with no warning. So the chart is two
+layers: a static base SVG for the axes and grid, and an interior layer for the
+dots, curve and cursor, wrapped in an HTML `<div>`. The transform animates the
+`<div>`.
 
 ```tsx title="the compositor handoff"
-// yRange changed. Content is already re-rendered at the new range;
-// animate the transform from "looks like the old range" to identity.
+// yRange changed. The interior is already re-rendered at the new range;
+// animate the wrapper from "looks like the old range" to identity.
 const sy = (newMax - newMin) / (oldMax - oldMin);
 const ty =
   MARGIN.top * (1 - sy) + (innerH * (oldMax - newMax)) / (oldMax - oldMin);
 
-group.animate(
+// `layer` is the HTML wrapper around the interior SVG, pinned over the
+// base with `inset-0` and `transform-origin: 0 0`, so the maths is the
+// same as it would be in the SVG view-box.
+layer.animate(
   [
     { transform: `translateY(${ty}px) scaleY(${sy})` },
     { transform: "translateY(0px) scaleY(1)" },
@@ -85,14 +98,19 @@ group.animate(
 
 </figure>
 
-No per-frame React render, no scale recompute. The two keyframes are pure
-`transform`, which the compositor can interpolate on its own thread. The main
-thread hands off once and goes quiet: main-thread time over the trace falls from
-the naive approach's 107 ms to about 40 ms, a 2.7x reduction. The picture on
-screen is identical; what dropped is main-thread work, not a jump in frame rate.
-In the trace the transition shows up in the Animations lane, the compositor
-driving it, while the main thread carries only the 5 Hz baseline. That is the
-whole, real result.
+With both in place the main thread hands off once and goes quiet: the two
+keyframes interpolate on the compositor's own thread while the main thread carries
+only the 5 Hz baseline. The picture on screen is identical; what dropped is
+main-thread work, not a jump in frame rate.
+
+**Confirm it composited; the Animations lane will not tell you.** This is the step
+that is easy to skip, because a transform animation shows up in DevTools'
+Animations lane whether or not it is on the compositor. The real check is the
+animation event in a trace: its `compositeFailed` field reads zero when the
+animation is composited, and a non-zero bitmask of reasons when it is not. The
+inner `<g>` reports a non-zero value; the HTML wrapper reports zero. Skip the
+check and it is easy to ship a "compositor" animation that is quietly running on
+the main thread, costing a little layout on every frame.
 
 <figure class="fig">
 
@@ -112,34 +130,32 @@ whole, real result.
 
 The absolute figures are small because this workload is modest. What matters is
 where the work lands and how it scales: on the main thread, cost grows with redraw
-frequency and node count. On the compositor, the animation is largely independent of both.
+frequency and node count. On the compositor, the transform is largely independent
+of both.
 
-## What I expected to cost, and didn't
+## Two layout costs that didn't bite
 
-Both of the things I was braced for are versions of the same worry: the browser
-quietly redoing layout, the pass that works out where every element sits, on each
-one of those 5 Hz frames. On a hot path that is exactly the kind of cost that
-hides. I was confident enough about both to have written them into my own code
-comments as established fact, and I built the rig partly to catch them in the act.
-Neither showed up.
+Both are versions of the same worry: the browser quietly redoing layout, the pass
+that works out where every element sits, on each one of those 5 Hz frames. On a
+hot path that is exactly the kind of cost that hides. I built the rig partly to
+catch them. Neither fired.
 
 **The forced reflow.** Layout is normally batched: your code can change a hundred
 things and the browser works out the new geometry once, just before it paints. But
-the moment your code *reads* a geometry value back (an element's position or size),
-the browser has to stop and compute layout right then. That synchronous, on-demand
-layout is a forced reflow, and on a hot path it is a classic offender. The
-CSS-transition arm of the benchmark includes one: it commits the start state with a
-geometry read before the transition begins. I expected that read to be a tax on
-every transition, worse while the chart was also redrawing.
+the moment your code *reads* a geometry value back (an element's position or
+size), the browser has to stop and compute layout right then. That synchronous,
+on-demand layout is a forced reflow, and on a hot path it is a classic offender. A
+CSS-transition build of the rescale includes one: it commits the start state with
+a geometry read before the transition begins.
 
-It is not, and the reason is specific. The thing being animated is a `transform`,
-which the browser resolves on the compositor without touching layout. So when the
-code forces the read, the transform has dirtied no layout; the read just pulls
-forward the layout the redraw would do that frame anyway. It reorders work, it does
-not add it. The two arms come out indistinguishable: 2.5 ms of layout against
-2.2 ms over five seconds. A forced reflow only bites when it makes layout run
-*twice* (read, change something that invalidates layout, read again). This one runs
-it once.
+It does not cost, and the reason is specific. The thing being animated is a
+composited `transform`, which the browser resolves without touching layout. So
+when the code forces the read, the transform has invalidated no layout; the read
+just pulls forward the layout the redraw would do that frame anyway. It reorders
+work, it does not add it. The two builds come out indistinguishable: 2.5 ms of
+layout against 2.2 ms over five seconds. A forced reflow only bites when it makes
+layout run *twice* (read, change something that invalidates layout, read again).
+This one runs it once.
 
 <figure class="fig">
 
@@ -149,29 +165,22 @@ it once.
 
 </figure>
 
-**The transform-box trap.** When the browser scales or moves an element, it does so
-around a reference box, and the `transform-box` property picks which box that is.
-One value, `fill-box`, ties it to the element's own bounding box, the rectangle
-wrapping its current contents. Next to a constant redraw, that looked like a trap:
-if the box wraps content that shifts every frame, the box shifts too, and surely
-the browser must re-resolve the transform against it each time, layout on every
-redraw.
-
-To give that the best chance to show, I built a version whose bounding box
-deliberately changes every tick, at 400 nodes. It stayed flat. `fill-box` against
-`view-box`, box moving or held still, made no measurable difference to layout or
-style recalc. The mechanism was plausible. The browser simply does not do the work
-I pictured. (`view-box` is still the right setting in the real code, but for the
-`transform-origin` maths, not for performance.)
+**The moving reference box.** A transform scales and moves an element around a
+reference box. Tie that box to the element's own content and, next to a constant
+redraw, it looks like a trap: a box that wraps content shifting every frame shifts
+too, and the browser might re-resolve the transform against it each time, layout
+on every redraw. The HTML wrapper closes this off by construction. Its reference
+box is the chart rectangle, pinned by `inset-0`; it does not track the dots moving
+inside it, so there is nothing to re-resolve.
 
 ## Where the cost actually is
 
-With the animation accounted for and the two suspected costs ruled out, the trace
+With the animation handed off and the two suspected costs ruled out, the trace
 points somewhere flat and unglamorous. The dominant per-redraw cost is
 `setAttribute` and Recalculate style, together around a third of main-thread time:
 mutating a couple of hundred SVG nodes' geometry five times a second, and the
-style invalidation that follows. It is identical across every arm, because it has
-nothing to do with how the rescale is animated.
+style invalidation that follows. It is identical across every build, because it
+has nothing to do with how the rescale is animated.
 
 <figure class="fig">
 
@@ -181,18 +190,21 @@ nothing to do with how the rescale is animated.
 
 </figure>
 
-Once the animation is on the compositor, further gains come from cutting redraw
-work, not from polishing the transition. That is the lever: fewer nodes, batched
-attribute writes, a different rendering substrate. Not the animation, which was
-already free, and not `transform-box`, which was never doing what I thought.
+The lever, then, is the redraw, not the transition: fewer nodes, batched attribute
+writes, or a different rendering substrate such as canvas. Not the animation,
+which is free once it is on the compositor, and not the reference box, which was
+never doing what I thought.
 
 ## What I would take from this
 
-Compositor-only is the right instinct, and it paid off: the rescale belongs on
-the compositor, and moving it there reduced main-thread work from about 107 ms to
-40 ms over the trace. The standard advice to animate `transform` and `opacity` and
-keep work off the main thread holds. But the two costs I was sure about either
-reorder into nothing or never fire, and the one that dominates is the plain one I
+Compositor-only is the right instinct, and it paid off: the rescale belongs on the
+compositor, and putting it there, on an element that could take it, dropped
+main-thread work from about 107 ms to 40 ms over the trace. Two qualifications
+matter as much as the headline. First, "animate `transform` and `opacity`" is
+necessary, not sufficient: the element has to be one the compositor will promote,
+and an SVG child is not, so confirm it with the `compositeFailed` flag rather than
+trusting the Animations lane. Second, the costs I was most sure about either
+reorder into nothing or never fire, and the one that dominated is the plain one I
 had stopped looking at: SVG mutation and style recalculation, roughly a third of
 main-thread time, untouched by anything I did to the animation.
 

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="290" viewBox="0 0 680 290" font-family="'JetBrains Mono','SFMono-Regular',ui-monospace,Menlo,Consolas,monospace" role="img" aria-label="Three rates govern a real-time UI, drawn as three bars of decreasing length. Input rate, 50 to 500 Hz, is widest. Compute rate, about 17 Hz with a p99 of about 58 ms, is shorter. Render rate, 5 Hz, is shortest. Each gap between the rates is a different failure: input outruns compute gives backlog, staleness and the tear; work per frame over the budget gives dropped frames; input outruns render means you coalesce or drop inputs. The failure is the relationship between the rates, not any absolute frequency.">
+  <defs>
+    <marker id="tr-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 1 L9 5 L0 9" fill="none" stroke="oklch(0.68 0.012 240)" stroke-width="1.4"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="678" height="288" rx="10" fill="oklch(0.22 0.012 240)" stroke="oklch(0.3 0.014 240)"/>
+
+  <!-- title -->
+  <text x="24" y="32" font-size="12.5" fill="oklch(0.68 0.012 240)">THREE RATES  ·  each gap is a different failure</text>
+
+  <!-- guides tying the input/render bar ends to the gap measurement below -->
+  <line x1="538" y1="82" x2="538" y2="216" stroke="oklch(0.3 0.014 240)" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="206" y1="202" x2="206" y2="216" stroke="oklch(0.3 0.014 240)" stroke-width="1" stroke-dasharray="3 4"/>
+
+  <!-- input -->
+  <text x="24" y="70" font-size="13" fill="oklch(0.94 0.008 240)">input</text>
+  <rect x="110" y="50" width="428" height="32" rx="6" fill="oklch(0.26 0.012 240)" stroke="oklch(0.34 0.014 240)"/>
+  <text x="124" y="70" font-size="13" fill="oklch(0.94 0.008 240)">50–500 Hz</text>
+
+  <!-- input outruns compute -->
+  <line x1="130" y1="84" x2="130" y2="108" stroke="oklch(0.68 0.012 240)" stroke-width="1.4" marker-end="url(#tr-arrow)"/>
+  <text x="150" y="101" font-size="12" fill="oklch(0.66 0.2 28)">outruns compute  →  backlog, staleness, the tear</text>
+
+  <!-- compute -->
+  <text x="24" y="130" font-size="13" fill="oklch(0.94 0.008 240)">compute</text>
+  <rect x="110" y="110" width="206" height="32" rx="6" fill="oklch(0.26 0.012 240)" stroke="oklch(0.34 0.014 240)"/>
+  <text x="124" y="130" font-size="13" fill="oklch(0.94 0.008 240)">~17 Hz · p99 ~58 ms</text>
+
+  <!-- work per frame over budget -->
+  <line x1="130" y1="144" x2="130" y2="168" stroke="oklch(0.68 0.012 240)" stroke-width="1.4" marker-end="url(#tr-arrow)"/>
+  <text x="150" y="161" font-size="12" fill="oklch(0.66 0.2 28)">work per frame &gt; the budget  →  dropped frames</text>
+
+  <!-- render -->
+  <text x="24" y="190" font-size="13" fill="oklch(0.94 0.008 240)">render</text>
+  <rect x="110" y="170" width="96" height="32" rx="6" fill="oklch(0.26 0.012 240)" stroke="oklch(0.34 0.014 240)"/>
+  <text x="124" y="190" font-size="13" fill="oklch(0.94 0.008 240)">5 Hz</text>
+
+  <!-- input vs render: the gap is the failure -->
+  <line x1="206" y1="218" x2="538" y2="218" stroke="oklch(0.68 0.012 240)" stroke-width="1.4" marker-start="url(#tr-arrow)" marker-end="url(#tr-arrow)"/>
+  <text x="372" y="238" font-size="12" text-anchor="middle" fill="oklch(0.66 0.2 28)">input outruns render  →  coalesce, or drop</text>
+
+  <!-- verdict -->
+  <text x="340" y="268" font-size="11" text-anchor="middle" fill="oklch(0.68 0.012 240)">a diagnostic lens, not a law · the failure is the relationship, not the Hz</text>
+</svg>
